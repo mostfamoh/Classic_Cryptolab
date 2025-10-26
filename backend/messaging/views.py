@@ -18,6 +18,7 @@ from ciphers.crypto_algorithms import (
 )
 from ciphers.enhanced_ciphers import EnhancedAffineCipher, EnhancedPlayfairCipher
 from ciphers.protection import apply_protection, remove_protection
+from ciphers.models import EncryptionHistory
 
 
 class ConversationListCreateView(generics.ListCreateAPIView):
@@ -263,6 +264,22 @@ class SendMessageView(APIView):
                 plaintext=plaintext,
                 ciphertext=ciphertext,
                 encryption_steps=steps if show_steps else None
+            )
+            
+            # Save to encryption history
+            EncryptionHistory.objects.create(
+                user=request.user,
+                cipher_type=cipher_type,
+                operation='encrypt',
+                mode='preshared',
+                input_text=plaintext,
+                output_text=ciphertext,
+                key_used=key,
+                protection_enabled=protection_enabled,
+                protection_type=protection_type if protection_enabled else None,
+                protection_meta={'defense': protection_type} if protection_enabled else None,
+                encryption_steps=steps if show_steps else None,
+                context='messaging'
             )
             
             # Update conversation timestamp
@@ -679,6 +696,22 @@ class DecryptMessageView(APIView):
                     {'error': 'Invalid cipher type'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+            
+            # Save to encryption history
+            EncryptionHistory.objects.create(
+                user=request.user,
+                cipher_type=cipher_type,
+                operation='decrypt',
+                mode='preshared',
+                input_text=ciphertext,
+                output_text=plaintext,
+                key_used=key,
+                protection_enabled=protection_enabled,
+                protection_type=protection_type if protection_enabled else None,
+                protection_meta={'defense': protection_type} if protection_enabled else None,
+                encryption_steps=steps,
+                context='messaging'
+            )
             
             return Response({
                 'message_id': message.id,

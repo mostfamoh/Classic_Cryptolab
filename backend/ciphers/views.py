@@ -63,6 +63,7 @@ class CipherOperationView(APIView):
             
             # Extract result text
             result_text = result_data.get('ciphertext') or result_data.get('plaintext')
+            steps = result_data.get('steps', []) if show_steps else None
             
             # Log operation if requested
             if log_operation:
@@ -73,7 +74,10 @@ class CipherOperationView(APIView):
                     mode=mode,
                     input_text=text,
                     output_text=result_text,
-                    key_used=key
+                    key_used=key,
+                    protection_enabled=False,  # No protection for standalone operations
+                    encryption_steps=steps,
+                    context='standalone'
                 )
             
             response_data = {
@@ -146,7 +150,7 @@ class CipherKeyDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class EncryptionHistoryListView(generics.ListAPIView):
-    """List encryption history for the current user."""
+    """List encryption history for the current user with advanced filtering."""
     serializer_class = EncryptionHistorySerializer
     permission_classes = (permissions.IsAuthenticated,)
     
@@ -162,6 +166,29 @@ class EncryptionHistoryListView(generics.ListAPIView):
         operation = self.request.query_params.get('operation', None)
         if operation:
             queryset = queryset.filter(operation=operation)
+        
+        # Filter by protection enabled
+        protection_enabled = self.request.query_params.get('protection_enabled', None)
+        if protection_enabled is not None:
+            queryset = queryset.filter(protection_enabled=protection_enabled.lower() == 'true')
+        
+        # Filter by protection type
+        protection_type = self.request.query_params.get('protection_type', None)
+        if protection_type:
+            queryset = queryset.filter(protection_type=protection_type)
+        
+        # Filter by context
+        context = self.request.query_params.get('context', None)
+        if context:
+            queryset = queryset.filter(context=context)
+        
+        # Limit results
+        limit = self.request.query_params.get('limit', None)
+        if limit:
+            try:
+                queryset = queryset[:int(limit)]
+            except ValueError:
+                pass
         
         return queryset
 

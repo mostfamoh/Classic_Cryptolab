@@ -14,10 +14,30 @@ class CipherKeySerializer(serializers.ModelSerializer):
 
 
 class EncryptionHistorySerializer(serializers.ModelSerializer):
+    protection_type_display = serializers.SerializerMethodField()
+    
     class Meta:
         model = EncryptionHistory
-        fields = ('id', 'cipher_type', 'operation', 'mode', 'input_text', 'output_text', 'key_used', 'timestamp')
+        fields = (
+            'id', 'cipher_type', 'operation', 'mode', 
+            'input_text', 'output_text', 'key_used', 
+            'protection_enabled', 'protection_type', 'protection_type_display',
+            'protection_meta', 'encryption_steps', 'context',
+            'timestamp'
+        )
         read_only_fields = ('id', 'timestamp')
+    
+    def get_protection_type_display(self, obj):
+        """Get human-readable protection type."""
+        if not obj.protection_enabled:
+            return 'No Protection'
+        
+        protection_map = {
+            'bruteforce': '🛡️ Argon2 Key Stretching',
+            'frequency': '🔊 Frequency Noise Injection',
+            'mitm': '🤝 Diffie-Hellman + HMAC',
+        }
+        return protection_map.get(obj.protection_type, obj.protection_type)
     
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user
