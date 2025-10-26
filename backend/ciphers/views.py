@@ -50,8 +50,18 @@ class CipherOperationView(APIView):
             
             elif cipher_type == 'hill':
                 cipher = HillCipher()
-                key_matrix = key.get('matrix', [[1, 0], [0, 1]])
-                result_data = cipher.encrypt(text, key_matrix, show_steps) if operation == 'encrypt' else cipher.decrypt(text, key_matrix, show_steps)
+                # Support both text key and matrix key
+                if isinstance(key, str):
+                    # Text key provided
+                    key_input = key
+                elif 'text_key' in key:
+                    # Text key in dictionary
+                    key_input = key.get('text_key')
+                else:
+                    # Matrix key provided
+                    key_input = key.get('matrix', [[1, 0], [0, 1]])
+                
+                result_data = cipher.encrypt(text, key_input, show_steps) if operation == 'encrypt' else cipher.decrypt(text, key_input, show_steps)
             
             elif cipher_type == 'playfair':
                 cipher = PlayfairCipher()

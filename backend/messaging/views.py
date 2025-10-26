@@ -216,9 +216,17 @@ class SendMessageView(APIView):
                     })
                     
             elif cipher_type == 'hill':
+                # Support both text key and matrix key
+                if isinstance(key, str):
+                    key_input = key
+                elif 'text_key' in key:
+                    key_input = key.get('text_key')
+                else:
+                    key_input = key.get('matrix', [[1, 0], [0, 1]])
+                
                 result_data = HillCipher.encrypt(
                     plaintext,
-                    key.get('matrix', [[1, 0], [0, 1]]),
+                    key_input,
                     show_steps
                 )
                 ciphertext = result_data.get('ciphertext')
@@ -345,9 +353,17 @@ class MITMAttackView(APIView):
                         show_steps
                     )
                 elif cipher_type == 'hill':
+                    # Support both text key and matrix key
+                    if isinstance(attacker_key, str):
+                        key_input = attacker_key
+                    elif 'text_key' in attacker_key:
+                        key_input = attacker_key.get('text_key')
+                    else:
+                        key_input = attacker_key.get('matrix', [[1, 0], [0, 1]])
+                    
                     result_data = HillCipher.decrypt(
                         ciphertext,
-                        attacker_key.get('matrix', [[1, 0], [0, 1]]),
+                        key_input,
                         show_steps
                     )
                 elif cipher_type == 'playfair':
@@ -395,9 +411,18 @@ class MITMAttackView(APIView):
                             show_steps
                         )
                     elif cipher_type == 'hill':
+                        # Support both text key and matrix key
+                        shared_key = conversation.shared_key
+                        if isinstance(shared_key, str):
+                            key_input = shared_key
+                        elif 'text_key' in shared_key:
+                            key_input = shared_key.get('text_key')
+                        else:
+                            key_input = shared_key.get('matrix', [[1, 0], [0, 1]])
+                        
                         reencrypt_data = HillCipher.encrypt(
                             modified_plaintext,
-                            conversation.shared_key.get('matrix', [[1, 0], [0, 1]]),
+                            key_input,
                             show_steps
                         )
                     elif cipher_type == 'playfair':
@@ -663,9 +688,17 @@ class DecryptMessageView(APIView):
                 else:
                     ciphertext_unprotected = ciphertext
                 
+                # Support both text key and matrix key
+                if isinstance(key, str):
+                    key_input = key
+                elif 'text_key' in key:
+                    key_input = key.get('text_key')
+                else:
+                    key_input = key.get('matrix', [[1, 0], [0, 1]])
+                
                 result_data = HillCipher.decrypt(
                     ciphertext_unprotected,
-                    key.get('matrix', [[1, 0], [0, 1]]),
+                    key_input,
                     show_steps=True
                 )
                 plaintext = result_data.get('plaintext')

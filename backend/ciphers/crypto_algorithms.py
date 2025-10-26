@@ -217,6 +217,85 @@ class HillCipher:
     """Hill Cipher implementation (2x2 or 3x3 matrix)."""
     
     @staticmethod
+    def generate_matrix_from_key(key: str, size: int = 2) -> Tuple[np.ndarray, List[str]]:
+        """
+        Generate a Hill cipher matrix from a text key.
+        
+        Args:
+            key: Text key (e.g., "HILL", "CRYPTO")
+            size: Matrix size (2 or 3)
+        
+        Returns:
+            Tuple of (matrix, steps for display)
+        """
+        steps = []
+        steps.append(f"=== Generating {size}x{size} Matrix from Key ===")
+        steps.append(f"1. Key text: '{key}'")
+        
+        # Convert key to uppercase and remove non-letters
+        key = ''.join(c.upper() for c in key if c.isalpha())
+        steps.append(f"2. Cleaned key: '{key}'")
+        
+        # Convert to numbers
+        numbers = [ord(c) - 65 for c in key]
+        steps.append(f"3. Convert to numbers (A=0, B=1, ...): {numbers}")
+        
+        # Need size*size numbers for matrix
+        needed = size * size
+        
+        # Pad or trim to exact size
+        if len(numbers) < needed:
+            # Pad with sequential numbers starting from last number + 1
+            last_num = numbers[-1] if numbers else 0
+            for i in range(len(numbers), needed):
+                numbers.append((last_num + i + 1) % 26)
+            steps.append(f"4. Padded to {needed} numbers: {numbers}")
+        elif len(numbers) > needed:
+            numbers = numbers[:needed]
+            steps.append(f"4. Trimmed to {needed} numbers: {numbers}")
+        else:
+            steps.append(f"4. Already have {needed} numbers")
+        
+        # Create matrix
+        matrix = np.array(numbers).reshape(size, size)
+        steps.append(f"5. Form {size}x{size} matrix:\n{matrix}")
+        
+        # Check if matrix is invertible
+        det = int(np.round(np.linalg.det(matrix)))
+        det_mod = det % 26
+        steps.append(f"6. Calculate determinant: {det} (mod 26 = {det_mod})")
+        
+        # Check if determinant is coprime with 26
+        import math
+        gcd = math.gcd(det_mod, 26)
+        steps.append(f"7. Check gcd({det_mod}, 26) = {gcd}")
+        
+        if gcd != 1:
+            steps.append(f"⚠️ Matrix not invertible! gcd ≠ 1")
+            steps.append(f"8. Adjusting matrix to make it invertible...")
+            
+            # Try adjusting diagonal elements
+            for adjustment in range(1, 26):
+                test_matrix = matrix.copy()
+                test_matrix[0, 0] = (matrix[0, 0] + adjustment) % 26
+                test_det = int(np.round(np.linalg.det(test_matrix)))
+                test_det_mod = test_det % 26
+                test_gcd = math.gcd(test_det_mod, 26)
+                
+                if test_gcd == 1:
+                    matrix = test_matrix
+                    det_mod = test_det_mod
+                    steps.append(f"   Adjusted matrix[0,0] by +{adjustment}")
+                    steps.append(f"   New matrix:\n{matrix}")
+                    steps.append(f"   New determinant: {test_det} (mod 26 = {det_mod})")
+                    steps.append(f"   gcd({det_mod}, 26) = {test_gcd} ✓")
+                    break
+        else:
+            steps.append(f"✓ Matrix is invertible!")
+        
+        return matrix, steps
+    
+    @staticmethod
     def _matrix_mod_inv(matrix: np.ndarray, modulus: int) -> np.ndarray:
         """Calculate modular inverse of a matrix."""
         size = matrix.shape[0]
@@ -263,9 +342,39 @@ class HillCipher:
         return ''.join(chr(num % 26 + 65) for num in numbers)
     
     @staticmethod
-    def encrypt(plaintext: str, key_matrix: List[List[int]], show_steps: bool = False) -> dict:
-        """Encrypt text using Hill cipher with 2x2 or 3x3 matrix."""
-        key = np.array(key_matrix)
+    def encrypt(plaintext: str, key_matrix, show_steps: bool = False) -> dict:
+        """
+        Encrypt text using Hill cipher with 2x2 or 3x3 matrix.
+        
+        Args:
+            plaintext: Text to encrypt
+            key_matrix: Either a List[List[int]] matrix or a string key
+            show_steps: Whether to show encryption steps
+        
+        Returns:
+            Dictionary with ciphertext and optional steps
+        """
+        steps = []
+        
+        # Check if key_matrix is a string (text key)
+        if isinstance(key_matrix, str):
+            if show_steps:
+                steps.append("=== Step 1: Generate Matrix from Text Key ===")
+            
+            # Determine size based on key length
+            key_len = len([c for c in key_matrix if c.isalpha()])
+            size = 2 if key_len <= 4 else 3
+            
+            # Generate matrix from key
+            key, matrix_steps = HillCipher.generate_matrix_from_key(key_matrix, size)
+            
+            if show_steps:
+                steps.extend(matrix_steps)
+                steps.append("\n=== Step 2: Encryption Process ===")
+        else:
+            # key_matrix is already a matrix
+            key = np.array(key_matrix)
+        
         size = key.shape[0]
         
         if key.shape[0] != key.shape[1] or size not in [2, 3]:
@@ -279,13 +388,13 @@ class HillCipher:
         while len(numbers) % size != 0:
             numbers.append(23)  # Add 'X'
         
-        steps = []
         if show_steps:
-            steps.append(f"1. Key Matrix ({size}x{size}):\n{key}")
+            if not isinstance(key_matrix, str):
+                steps.append(f"1. Key Matrix ({size}x{size}):\n{key}")
             steps.append(f"2. Plaintext: {plaintext}")
-            steps.append(f"3. Convert to numbers: {numbers}")
+            steps.append(f"3. Convert to numbers (A=0, B=1, ...): {numbers}")
             if len(numbers) > original_length:
-                steps.append(f"4. Padded to multiple of {size}: {numbers}")
+                steps.append(f"4. Padded with 'X' (23) to multiple of {size}: {numbers}")
         
         # Encrypt in blocks
         encrypted = []
@@ -313,9 +422,39 @@ class HillCipher:
             return {"ciphertext": ciphertext}
     
     @staticmethod
-    def decrypt(ciphertext: str, key_matrix: List[List[int]], show_steps: bool = False) -> dict:
-        """Decrypt text using Hill cipher."""
-        key = np.array(key_matrix)
+    def decrypt(ciphertext: str, key_matrix, show_steps: bool = False) -> dict:
+        """
+        Decrypt text using Hill cipher.
+        
+        Args:
+            ciphertext: Text to decrypt
+            key_matrix: Either a List[List[int]] matrix or a string key
+            show_steps: Whether to show decryption steps
+        
+        Returns:
+            Dictionary with plaintext and optional steps
+        """
+        steps = []
+        
+        # Check if key_matrix is a string (text key)
+        if isinstance(key_matrix, str):
+            if show_steps:
+                steps.append("=== Step 1: Generate Matrix from Text Key ===")
+            
+            # Determine size based on key length
+            key_len = len([c for c in key_matrix if c.isalpha()])
+            size = 2 if key_len <= 4 else 3
+            
+            # Generate matrix from key
+            key, matrix_steps = HillCipher.generate_matrix_from_key(key_matrix, size)
+            
+            if show_steps:
+                steps.extend(matrix_steps)
+                steps.append("\n=== Step 2: Calculate Inverse Matrix ===")
+        else:
+            # key_matrix is already a matrix
+            key = np.array(key_matrix)
+        
         size = key.shape[0]
         
         if key.shape[0] != key.shape[1] or size not in [2, 3]:
@@ -327,17 +466,33 @@ class HillCipher:
         except ValueError as e:
             raise ValueError(f"Cannot decrypt: {str(e)}")
         
-        steps = []
         if show_steps:
-            steps.append(f"1. Key Matrix ({size}x{size}):\n{key}")
-            steps.append(f"2. Inverse Key Matrix:\n{key_inv}")
-            steps.append(f"3. Ciphertext: {ciphertext}")
+            if not isinstance(key_matrix, str):
+                steps.append(f"1. Key Matrix ({size}x{size}):\n{key}")
+            steps.append(f"Inverse Key Matrix:\n{key_inv}")
+            
+            # Show how inverse was calculated
+            det = int(np.round(np.linalg.det(key)))
+            det_mod = det % 26
+            steps.append(f"Determinant: {det} (mod 26 = {det_mod})")
+            
+            # Find determinant inverse
+            det_inv = None
+            for i in range(1, 26):
+                if (det_mod * i) % 26 == 1:
+                    det_inv = i
+                    break
+            steps.append(f"Determinant inverse: {det_inv}")
+            steps.append(f"Verification: ({det_mod} × {det_inv}) mod 26 = {(det_mod * det_inv) % 26}")
+            
+            steps.append(f"\n=== Step 3: Decryption Process ===")
+            steps.append(f"Ciphertext: {ciphertext}")
         
         # Convert to numbers
         numbers = HillCipher._text_to_numbers(ciphertext)
         
         if show_steps:
-            steps.append(f"4. Convert to numbers: {numbers}")
+            steps.append(f"Convert to numbers: {numbers}")
         
         # Decrypt in blocks
         decrypted = []

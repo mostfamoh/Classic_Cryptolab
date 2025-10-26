@@ -138,40 +138,77 @@ const Ciphers = () => {
 
             {selectedCipher === 'hill' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Matrix Size</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Key Input Method</label>
                 <select
-                  value={key.matrix?.length || 2}
+                  value={key.inputMethod || 'text'}
                   onChange={(e) => {
-                    const size = parseInt(e.target.value);
-                    const defaultMatrix = size === 2 
-                      ? [[3, 3], [2, 5]]
-                      : [[6, 24, 1], [13, 16, 10], [20, 17, 15]];
-                    setKey({ matrix: defaultMatrix });
-                  }}
-                  className="input-field mb-2"
-                >
-                  <option value="2">2×2 Matrix</option>
-                  <option value="3">3×3 Matrix</option>
-                </select>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Key Matrix</label>
-                <textarea
-                  value={JSON.stringify(key.matrix || [[3, 3], [2, 5]])}
-                  onChange={(e) => {
-                    try {
-                      const matrix = JSON.parse(e.target.value);
-                      setKey({ matrix });
-                    } catch (err) {
-                      // Invalid JSON
+                    const method = e.target.value;
+                    if (method === 'text') {
+                      setKey({ inputMethod: 'text', text_key: '' });
+                    } else {
+                      setKey({ inputMethod: 'matrix', matrix: [[3, 3], [2, 5]] });
                     }
                   }}
-                  className="input-field font-mono text-sm"
-                  rows="3"
-                  placeholder="[[3,3],[2,5]]"
-                  required
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Enter matrix as JSON. Examples: 2×2: [[3,3],[2,5]] or 3×3: [[6,24,1],[13,16,10],[20,17,15]]
-                </p>
+                  className="input-field mb-3"
+                >
+                  <option value="text">Text Key (Recommended)</option>
+                  <option value="matrix">Matrix (Advanced)</option>
+                </select>
+
+                {key.inputMethod === 'text' ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Text Key</label>
+                    <input
+                      type="text"
+                      value={key.text_key || ''}
+                      onChange={(e) => setKey({ ...key, text_key: e.target.value.toUpperCase() })}
+                      className="input-field"
+                      placeholder="Enter key (e.g., HILL, CRYPTO)"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      💡 Enter a text key (letters only). Examples: "HILL" for 2×2, "CRYPTOLAB" for 3×3.
+                      The system will automatically generate a valid matrix and show all steps.
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Matrix Size</label>
+                    <select
+                      value={key.matrix?.length || 2}
+                      onChange={(e) => {
+                        const size = parseInt(e.target.value);
+                        const defaultMatrix = size === 2 
+                          ? [[3, 3], [2, 5]]
+                          : [[6, 24, 1], [13, 16, 10], [20, 17, 15]];
+                        setKey({ ...key, matrix: defaultMatrix });
+                      }}
+                      className="input-field mb-2"
+                    >
+                      <option value="2">2×2 Matrix</option>
+                      <option value="3">3×3 Matrix</option>
+                    </select>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Key Matrix</label>
+                    <textarea
+                      value={JSON.stringify(key.matrix || [[3, 3], [2, 5]])}
+                      onChange={(e) => {
+                        try {
+                          const matrix = JSON.parse(e.target.value);
+                          setKey({ ...key, matrix });
+                        } catch (err) {
+                          // Invalid JSON
+                        }
+                      }}
+                      className="input-field font-mono text-sm"
+                      rows="3"
+                      placeholder="[[3,3],[2,5]]"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter matrix as JSON. Examples: 2×2: [[3,3],[2,5]] or 3×3: [[6,24,1],[13,16,10],[20,17,15]]
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 

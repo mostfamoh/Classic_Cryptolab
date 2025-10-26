@@ -285,7 +285,7 @@ export default function Messaging() {
     const defaultKeys = {
       caesar: { shift: 3 },
       affine: { a: 5, b: 8 },
-      hill: { matrix: [[3, 3], [2, 5]] },
+      hill: { inputMethod: 'text', text_key: '' },
       playfair: { keyword: 'SECRET' }
     };
     setNewConvData({ ...newConvData, cipher_type: cipherType, key: defaultKeys[cipherType] });
@@ -337,36 +337,71 @@ export default function Messaging() {
       case 'hill':
         return (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Matrix (2×2 or 3×3)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Key Input Method</label>
             <select
-              value={key.matrix?.length || 2}
+              value={key.inputMethod || 'text'}
               onChange={(e) => {
-                const size = parseInt(e.target.value);
-                const defaultMatrix = size === 2 
-                  ? [[3, 3], [2, 5]]
-                  : [[6, 24, 1], [13, 16, 10], [20, 17, 15]];
-                setNewConvData({ ...newConvData, key: { matrix: defaultMatrix } });
-              }}
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 mb-2"
-            >
-              <option value="2">2×2 Matrix</option>
-              <option value="3">3×3 Matrix</option>
-            </select>
-            <textarea
-              value={JSON.stringify(key.matrix || [[3, 3], [2, 5]])}
-              onChange={(e) => {
-                try {
-                  const matrix = JSON.parse(e.target.value);
-                  setNewConvData({ ...newConvData, key: { matrix } });
-                } catch (err) {
-                  // Invalid JSON, ignore
+                const method = e.target.value;
+                if (method === 'text') {
+                  setNewConvData({ ...newConvData, key: { inputMethod: 'text', text_key: '' } });
+                } else {
+                  setNewConvData({ ...newConvData, key: { inputMethod: 'matrix', matrix: [[3, 3], [2, 5]] } });
                 }
               }}
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-              rows="3"
-              placeholder="[[3,3],[2,5]]"
-            />
-            <p className="text-xs text-gray-500 mt-1">Enter matrix as JSON array</p>
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 mb-3"
+            >
+              <option value="text">Text Key (Recommended)</option>
+              <option value="matrix">Matrix (Advanced)</option>
+            </select>
+
+            {key.inputMethod === 'text' ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Text Key</label>
+                <input
+                  type="text"
+                  value={key.text_key || ''}
+                  onChange={(e) => setNewConvData({ ...newConvData, key: { ...key, text_key: e.target.value.toUpperCase() } })}
+                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter key (e.g., HILL, CRYPTO)"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 Enter a text key (letters only). The system will generate a valid matrix automatically.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Matrix (2×2 or 3×3)</label>
+                <select
+                  value={key.matrix?.length || 2}
+                  onChange={(e) => {
+                    const size = parseInt(e.target.value);
+                    const defaultMatrix = size === 2 
+                      ? [[3, 3], [2, 5]]
+                      : [[6, 24, 1], [13, 16, 10], [20, 17, 15]];
+                    setNewConvData({ ...newConvData, key: { ...key, matrix: defaultMatrix } });
+                  }}
+                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 mb-2"
+                >
+                  <option value="2">2×2 Matrix</option>
+                  <option value="3">3×3 Matrix</option>
+                </select>
+                <textarea
+                  value={JSON.stringify(key.matrix || [[3, 3], [2, 5]])}
+                  onChange={(e) => {
+                    try {
+                      const matrix = JSON.parse(e.target.value);
+                      setNewConvData({ ...newConvData, key: { ...key, matrix } });
+                    } catch (err) {
+                      // Invalid JSON, ignore
+                    }
+                  }}
+                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  rows="3"
+                  placeholder="[[3,3],[2,5]]"
+                />
+                <p className="text-xs text-gray-500 mt-1">Enter matrix as JSON array</p>
+              </div>
+            )}
           </div>
         );
 

@@ -34,7 +34,7 @@ export default function MITMAttack() {
       const defaultKeys = {
         caesar: { shift: 3 },
         affine: { a: 5, b: 8 },
-        hill: { matrix: [[3, 3], [2, 5]] },
+        hill: { inputMethod: 'text', text_key: '' },
         playfair: { keyword: 'SECRET' }
       };
       setAttackData({
@@ -160,20 +160,55 @@ export default function MITMAttack() {
       case 'hill':
         return (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Guessed Matrix</label>
-            <textarea
-              value={JSON.stringify(attacker_key.matrix || [[3, 3], [2, 5]])}
+            <label className="block text-sm font-medium text-gray-700 mb-1">Key Input Method</label>
+            <select
+              value={attacker_key.inputMethod || 'text'}
               onChange={(e) => {
-                try {
-                  const matrix = JSON.parse(e.target.value);
-                  setAttackData({ ...attackData, attacker_key: { matrix } });
-                } catch (err) {
-                  // Invalid JSON
+                const method = e.target.value;
+                if (method === 'text') {
+                  setAttackData({ ...attackData, attacker_key: { inputMethod: 'text', text_key: '' } });
+                } else {
+                  setAttackData({ ...attackData, attacker_key: { inputMethod: 'matrix', matrix: [[3, 3], [2, 5]] } });
                 }
               }}
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-red-500 font-mono text-sm"
-              rows="3"
-            />
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-red-500 mb-3"
+            >
+              <option value="text">Text Key (Recommended)</option>
+              <option value="matrix">Matrix (Advanced)</option>
+            </select>
+
+            {attacker_key.inputMethod === 'text' ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Guessed Text Key</label>
+                <input
+                  type="text"
+                  value={attacker_key.text_key || ''}
+                  onChange={(e) => setAttackData({ ...attackData, attacker_key: { ...attacker_key, text_key: e.target.value.toUpperCase() } })}
+                  className="w-full p-2 border rounded focus:ring-2 focus:ring-red-500"
+                  placeholder="Enter guessed key (e.g., HILL)"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 Enter the text key you think was used
+                </p>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Guessed Matrix</label>
+                <textarea
+                  value={JSON.stringify(attacker_key.matrix || [[3, 3], [2, 5]])}
+                  onChange={(e) => {
+                    try {
+                      const matrix = JSON.parse(e.target.value);
+                      setAttackData({ ...attackData, attacker_key: { ...attacker_key, matrix } });
+                    } catch (err) {
+                      // Invalid JSON
+                    }
+                  }}
+                  className="w-full p-2 border rounded focus:ring-2 focus:ring-red-500 font-mono text-sm"
+                  rows="3"
+                />
+              </div>
+            )}
           </div>
         );
 
