@@ -379,3 +379,38 @@ class InterceptedMessageListView(generics.ListAPIView):
         # In a real scenario, you'd filter by attacker
         return InterceptedMessage.objects.all()
 
+
+class ToggleProtectionView(APIView):
+    """Toggle encryption protection for a conversation."""
+    permission_classes = (permissions.IsAuthenticated,)
+    
+    def post(self, request, conversation_id):
+        try:
+            # Get conversation and verify user is part of it
+            conversation = Conversation.objects.filter(
+                id=conversation_id
+            ).filter(
+                Q(user_a=request.user) | Q(user_b=request.user)
+            ).first()
+            
+            if not conversation:
+                return Response(
+                    {'error': 'Conversation not found or access denied'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Toggle protection
+            conversation.protection_enabled = not conversation.protection_enabled
+            conversation.save()
+            
+            return Response({
+                'conversation_id': conversation.id,
+                'protection_enabled': conversation.protection_enabled,
+                'message': f"Protection {'activated' if conversation.protection_enabled else 'deactivated'}"
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )

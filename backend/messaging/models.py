@@ -32,6 +32,10 @@ class Conversation(models.Model):
         default=False,
         help_text='Whether this conversation is under MITM attack'
     )
+    protection_enabled = models.BooleanField(
+        default=True,
+        help_text='Whether encryption protection is active for this conversation'
+    )
     
     class Meta:
         db_table = 'conversations'

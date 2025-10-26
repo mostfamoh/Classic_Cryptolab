@@ -21,7 +21,7 @@ class ConversationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Conversation
         fields = ('id', 'user_a', 'user_b', 'user_a_id', 'user_b_id', 'cipher_type', 
-                  'shared_key', 'is_intercepted', 'created_at', 'updated_at', 'message_count')
+                  'shared_key', 'is_intercepted', 'protection_enabled', 'created_at', 'updated_at', 'message_count')
         read_only_fields = ('id', 'created_at', 'updated_at')
     
     def get_message_count(self, obj):

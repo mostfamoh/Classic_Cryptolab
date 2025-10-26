@@ -17,6 +17,7 @@ export default function Messaging() {
   const [loadingAttackDetails, setLoadingAttackDetails] = useState({});
   const [decryptedMessages, setDecryptedMessages] = useState({});
   const [decryptingMessages, setDecryptingMessages] = useState({});
+  const [togglingProtection, setTogglingProtection] = useState(false);
 
   // New conversation form
   const [newConvData, setNewConvData] = useState({
@@ -144,6 +145,38 @@ export default function Messaging() {
       alert('Failed to decrypt message: ' + (err.response?.data?.error || err.message));
     } finally {
       setDecryptingMessages(prev => ({ ...prev, [message.id]: false }));
+    }
+  };
+
+  const handleToggleProtection = async () => {
+    if (!selectedConversation) return;
+
+    setTogglingProtection(true);
+    setError('');
+
+    try {
+      const response = await api.post(
+        `/messaging/conversations/${selectedConversation.id}/toggle-protection/`
+      );
+      
+      // Update the selected conversation
+      const updatedConversation = {
+        ...selectedConversation,
+        protection_enabled: response.data.protection_enabled
+      };
+      setSelectedConversation(updatedConversation);
+      
+      // Update in conversations list
+      setConversations(conversations.map(c => 
+        c.id === selectedConversation.id ? updatedConversation : c
+      ));
+      
+      setSuccessMsg(response.data.message);
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (err) {
+      setError('Failed to toggle protection: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setTogglingProtection(false);
     }
   };
 
@@ -477,15 +510,37 @@ export default function Messaging() {
                         )}
                       </p>
                     </div>
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={showSteps}
-                        onChange={(e) => setShowSteps(e.target.checked)}
-                        className="rounded"
-                      />
-                      Show encryption steps
-                    </label>
+                    <div className="flex items-center gap-4">
+                      {/* Protection Toggle Button */}
+                      <button
+                        onClick={handleToggleProtection}
+                        disabled={togglingProtection}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                          selectedConversation.protection_enabled
+                            ? 'bg-green-600 hover:bg-green-700 text-white'
+                            : 'bg-red-500 hover:bg-red-600 text-white'
+                        } disabled:opacity-50`}
+                        title={selectedConversation.protection_enabled ? 'Protection is ON - Click to disable' : 'Protection is OFF - Click to enable'}
+                      >
+                        {togglingProtection ? (
+                          <>🔄 Updating...</>
+                        ) : selectedConversation.protection_enabled ? (
+                          <>🔒 Protection ON</>
+                        ) : (
+                          <>🔓 Protection OFF</>
+                        )}
+                      </button>
+                      
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={showSteps}
+                          onChange={(e) => setShowSteps(e.target.checked)}
+                          className="rounded"
+                        />
+                        Show encryption steps
+                      </label>
+                    </div>
                   </div>
                 </div>
 
