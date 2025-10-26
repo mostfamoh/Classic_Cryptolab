@@ -6,7 +6,8 @@ from .views import (
     SendMessageView,
     MITMAttackView,
     InterceptedMessageListView,
-    ToggleProtectionView
+    ToggleProtectionView,
+    DecryptMessageView
 )
 
 urlpatterns = [
@@ -15,6 +16,7 @@ urlpatterns = [
     path('conversations/<int:conversation_id>/messages/', MessageListView.as_view(), name='message-list'),
     path('conversations/<int:conversation_id>/toggle-protection/', ToggleProtectionView.as_view(), name='toggle-protection'),
     path('messages/send/', SendMessageView.as_view(), name='send-message'),
+    path('messages/<int:message_id>/decrypt/', DecryptMessageView.as_view(), name='decrypt-message'),
     path('mitm/attack/', MITMAttackView.as_view(), name='mitm-attack'),
     path('mitm/interceptions/', InterceptedMessageListView.as_view(), name='interceptions-list'),
 ]

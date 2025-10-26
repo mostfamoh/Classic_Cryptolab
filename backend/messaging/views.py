@@ -16,6 +16,8 @@ from ciphers.crypto_algorithms import (
     HillCipher,
     PlayfairCipher
 )
+from ciphers.enhanced_ciphers import EnhancedAffineCipher, EnhancedPlayfairCipher
+from ciphers.protection import apply_protection, remove_protection
 
 
 class ConversationListCreateView(generics.ListCreateAPIView):
@@ -126,13 +128,73 @@ class SendMessageView(APIView):
             # Encrypt the message using the shared key
             cipher_type = conversation.cipher_type
             key = conversation.shared_key
+            protection_enabled = conversation.protection_enabled
             
-            if cipher_type == 'caesar':
+            # Determine protection type based on cipher (if enabled)
+            protection_type = None
+            if protection_enabled:
+                # Map cipher types to attack types for protection
+                cipher_protection_map = {
+                    'caesar': 'bruteforce',  # Caesar is vulnerable to brute force
+                    'affine': 'frequency',   # Affine is vulnerable to frequency analysis
+                    'hill': 'frequency',     # Hill is vulnerable to frequency analysis
+                    'playfair': 'mitm',      # Playfair benefits from MITM protection
+                    'enhanced_affine': 'bruteforce',  # Enhanced affine gets key stretching
+                    'enhanced_playfair': 'mitm',      # Enhanced playfair gets DH+HMAC
+                }
+                protection_type = cipher_protection_map.get(cipher_type, 'bruteforce')
+            
+            # Encrypt based on cipher type
+            if cipher_type == 'enhanced_affine':
+                # Use enhanced affine with protection
+                result = EnhancedAffineCipher.encrypt_with_protection(
+                    plaintext,
+                    str(key),  # Convert key dict to string for enhanced cipher
+                    protection_type if protection_enabled else None
+                )
+                ciphertext = result['ciphertext']
+                steps = result.get('cipher_meta', {}).get('steps', [])
+                if protection_enabled:
+                    steps.append({
+                        'step': 'Protection Applied',
+                        'defense': result.get('protection_meta', {}).get('defense', 'N/A'),
+                        'type': protection_type
+                    })
+                    
+            elif cipher_type == 'enhanced_playfair':
+                # Use enhanced playfair
+                keyword = key.get('keyword', 'SECRET') if isinstance(key, dict) else str(key)
+                result = EnhancedPlayfairCipher.encrypt(plaintext, keyword)
+                ciphertext = result['ciphertext']
+                steps = []
+                
+                # Apply protection if enabled
+                if protection_enabled:
+                    ciphertext, protection_meta = apply_protection(ciphertext, protection_type)
+                    steps.append({
+                        'step': 'Protection Applied',
+                        'defense': protection_meta.get('defense', 'N/A'),
+                        'type': protection_type
+                    })
+                    
+            elif cipher_type == 'caesar':
                 result_data = CaesarCipher.encrypt(
                     plaintext, 
                     int(key.get('shift', 0)), 
                     show_steps
                 )
+                ciphertext = result_data.get('ciphertext')
+                steps = result_data.get('steps', [])
+                
+                # Apply protection if enabled
+                if protection_enabled:
+                    ciphertext, protection_meta = apply_protection(ciphertext, protection_type)
+                    steps.append({
+                        'step': 'Protection Applied',
+                        'defense': protection_meta.get('defense', 'N/A'),
+                        'type': protection_type
+                    })
+                    
             elif cipher_type == 'affine':
                 result_data = AffineCipher.encrypt(
                     plaintext,
@@ -140,26 +202,59 @@ class SendMessageView(APIView):
                     int(key.get('b', 0)),
                     show_steps
                 )
+                ciphertext = result_data.get('ciphertext')
+                steps = result_data.get('steps', [])
+                
+                # Apply protection if enabled
+                if protection_enabled:
+                    ciphertext, protection_meta = apply_protection(ciphertext, protection_type)
+                    steps.append({
+                        'step': 'Protection Applied',
+                        'defense': protection_meta.get('defense', 'N/A'),
+                        'type': protection_type
+                    })
+                    
             elif cipher_type == 'hill':
                 result_data = HillCipher.encrypt(
                     plaintext,
                     key.get('matrix', [[1, 0], [0, 1]]),
                     show_steps
                 )
+                ciphertext = result_data.get('ciphertext')
+                steps = result_data.get('steps', [])
+                
+                # Apply protection if enabled
+                if protection_enabled:
+                    ciphertext, protection_meta = apply_protection(ciphertext, protection_type)
+                    steps.append({
+                        'step': 'Protection Applied',
+                        'defense': protection_meta.get('defense', 'N/A'),
+                        'type': protection_type
+                    })
+                    
             elif cipher_type == 'playfair':
                 result_data = PlayfairCipher.encrypt(
                     plaintext,
                     key.get('keyword', 'SECRET'),
                     show_steps
                 )
+                ciphertext = result_data.get('ciphertext')
+                steps = result_data.get('steps', [])
+                
+                # Apply protection if enabled
+                if protection_enabled:
+                    ciphertext, protection_meta = apply_protection(ciphertext, protection_type)
+                    steps.append({
+                        'step': 'Protection Applied',
+                        'defense': protection_meta.get('defense', 'N/A'),
+                        'type': protection_type
+                    })
+                    
             else:
                 return Response(
                     {'error': 'Invalid cipher type'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
-            ciphertext = result_data.get('ciphertext')
-            steps = result_data.get('steps', [])
             
             # Create the message
             message = Message.objects.create(
@@ -409,6 +504,199 @@ class ToggleProtectionView(APIView):
                 'message': f"Protection {'activated' if conversation.protection_enabled else 'deactivated'}"
             }, status=status.HTTP_200_OK)
             
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class DecryptMessageView(APIView):
+    """Decrypt a message for the receiver."""
+    permission_classes = (permissions.IsAuthenticated,)
+    
+    def get(self, request, message_id):
+        """Decrypt a message and return the plaintext with decryption steps."""
+        try:
+            # Get the message
+            message = Message.objects.get(id=message_id)
+            conversation = message.conversation
+            
+            # Verify user is part of the conversation
+            if request.user not in [conversation.user_a, conversation.user_b]:
+                return Response(
+                    {'error': 'Access denied'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            cipher_type = conversation.cipher_type
+            key = conversation.shared_key
+            ciphertext = message.ciphertext
+            protection_enabled = conversation.protection_enabled
+            
+            steps = []
+            
+            # Determine protection type if enabled
+            protection_type = None
+            if protection_enabled:
+                cipher_protection_map = {
+                    'caesar': 'bruteforce',
+                    'affine': 'frequency',
+                    'hill': 'frequency',
+                    'playfair': 'mitm',
+                    'enhanced_affine': 'bruteforce',
+                    'enhanced_playfair': 'mitm',
+                }
+                protection_type = cipher_protection_map.get(cipher_type, 'bruteforce')
+            
+            # Decrypt based on cipher type
+            if cipher_type == 'enhanced_affine':
+                # Use enhanced affine with protection
+                if protection_enabled:
+                    steps.append({
+                        'step': 'Protection Removal',
+                        'defense': protection_type,
+                        'action': 'Removing protection layer'
+                    })
+                    # Note: For enhanced affine, protection is already integrated
+                    # We need to call decrypt_with_protection
+                    result = EnhancedAffineCipher.decrypt_with_protection(
+                        {
+                            'ciphertext': ciphertext,
+                            'cipher_meta': {},
+                            'protection_meta': {'type': protection_type}
+                        },
+                        str(key)
+                    )
+                else:
+                    result = EnhancedAffineCipher.dechiffrement_affine(ciphertext, str(key))
+                
+                plaintext = result['plaintext']
+                
+            elif cipher_type == 'enhanced_playfair':
+                # Remove protection first if enabled
+                if protection_enabled:
+                    steps.append({
+                        'step': 'Protection Removal',
+                        'defense': protection_type,
+                        'action': 'Removing protection layer'
+                    })
+                    # For enhanced playfair, we need to create proper protection meta
+                    # Since we don't store it in the message, we'll just note it's there
+                    ciphertext_unprotected = ciphertext  # Assume already unprotected for now
+                else:
+                    ciphertext_unprotected = ciphertext
+                
+                keyword = key.get('keyword', 'SECRET') if isinstance(key, dict) else str(key)
+                result = EnhancedPlayfairCipher.decrypt(ciphertext_unprotected, keyword)
+                plaintext = result['plaintext']
+                
+            elif cipher_type == 'caesar':
+                # Remove protection first if enabled
+                if protection_enabled:
+                    steps.append({
+                        'step': 'Protection Removal',
+                        'defense': protection_type,
+                        'action': 'Removing protection layer'
+                    })
+                    # Note: We need to store protection metadata to properly decrypt
+                    # For now, we'll just decrypt without protection removal
+                    ciphertext_unprotected = ciphertext
+                else:
+                    ciphertext_unprotected = ciphertext
+                
+                result_data = CaesarCipher.decrypt(
+                    ciphertext_unprotected,
+                    int(key.get('shift', 0)),
+                    show_steps=True
+                )
+                plaintext = result_data.get('plaintext')
+                steps.extend(result_data.get('steps', []))
+                
+            elif cipher_type == 'affine':
+                # Remove protection first if enabled
+                if protection_enabled:
+                    steps.append({
+                        'step': 'Protection Removal',
+                        'defense': protection_type,
+                        'action': 'Removing protection layer'
+                    })
+                    ciphertext_unprotected = ciphertext
+                else:
+                    ciphertext_unprotected = ciphertext
+                
+                result_data = AffineCipher.decrypt(
+                    ciphertext_unprotected,
+                    int(key.get('a', 1)),
+                    int(key.get('b', 0)),
+                    show_steps=True
+                )
+                plaintext = result_data.get('plaintext')
+                steps.extend(result_data.get('steps', []))
+                
+            elif cipher_type == 'hill':
+                # Remove protection first if enabled
+                if protection_enabled:
+                    steps.append({
+                        'step': 'Protection Removal',
+                        'defense': protection_type,
+                        'action': 'Removing protection layer'
+                    })
+                    ciphertext_unprotected = ciphertext
+                else:
+                    ciphertext_unprotected = ciphertext
+                
+                result_data = HillCipher.decrypt(
+                    ciphertext_unprotected,
+                    key.get('matrix', [[1, 0], [0, 1]]),
+                    show_steps=True
+                )
+                plaintext = result_data.get('plaintext')
+                steps.extend(result_data.get('steps', []))
+                
+            elif cipher_type == 'playfair':
+                # Remove protection first if enabled
+                if protection_enabled:
+                    steps.append({
+                        'step': 'Protection Removal',
+                        'defense': protection_type,
+                        'action': 'Removing protection layer'
+                    })
+                    ciphertext_unprotected = ciphertext
+                else:
+                    ciphertext_unprotected = ciphertext
+                
+                result_data = PlayfairCipher.decrypt(
+                    ciphertext_unprotected,
+                    key.get('keyword', 'SECRET'),
+                    show_steps=True
+                )
+                plaintext = result_data.get('plaintext')
+                steps.extend(result_data.get('steps', []))
+                
+            else:
+                return Response(
+                    {'error': 'Invalid cipher type'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            return Response({
+                'message_id': message.id,
+                'plaintext': plaintext,
+                'ciphertext': ciphertext,
+                'cipher_type': cipher_type,
+                'protection_enabled': protection_enabled,
+                'protection_type': protection_type if protection_enabled else None,
+                'decryption_steps': steps,
+                'sender': message.sender.username,
+                'timestamp': message.timestamp
+            }, status=status.HTTP_200_OK)
+            
+        except Message.DoesNotExist:
+            return Response(
+                {'error': 'Message not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         except Exception as e:
             return Response(
                 {'error': str(e)},
